@@ -1,78 +1,74 @@
-from db import CURSOR, CONN
-from models.category import Category
+from db import get_connection
+from Models.category import Category
 
 class Laptop:
-    def __init__(self, id: int | None, name: str, brand: str, price: float, stock: int, category_id: int):
+    def __init__(self, name, price, category_id, id=None):
         self.id = id
-        self.name = name.strip()
-        self.brand = brand.strip()
-        self.price = float(price)
-        self.stock = int(stock)
-        self.category_id = int(category_id)
-        self._validate()
+        self.name = name
+        self.price = price
+        self.category_id = category_id
 
-    def __repr__(self) -> str:
-        return f"<Laptop {self.id}: {self.name} ({self.brand}) - ${self.price} - Stock: {self.stock} - Category {self.category_id}>"
+    @property
+    def name(self):
+        return self._name
 
-    def _validate(self):
-        if not self.name:
-            raise ValueError("Laptop name cannot be empty.")
-        if not self.brand:
-            raise ValueError("Laptop brand cannot be empty.")
-        if self.price < 0:
-            raise ValueError("Price must be >= 0.")
-        if self.stock < 0:
-            raise ValueError("Stock must be >= 0.")
-        if not Category.find_by_id(self.category_id):
-            raise ValueError(f"Category ID {self.category_id} does not exist.")
+    @name.setter
+    def name(self, value):
+        if not value:
+            raise ValueError("Laptop name cannot be empty")
+        self._name = value
 
-    @classmethod
-    def create_table(cls) -> None:
-        CURSOR.execute("""
-            CREATE TABLE IF NOT EXISTS laptops (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                brand TEXT NOT NULL,
-                price REAL NOT NULL,
-                stock INTEGER NOT NULL,
-                category_id INTEGER NOT NULL,
-                FOREIGN KEY(category_id) REFERENCES categories(id)
+    @property
+    def price(self):
+        return self._price
+
+    @price.setter
+    def price(self, value):
+        if value <= 0:
+            raise ValueError("Price must be positive")
+        self._price = value
+
+    def save(self):
+        conn = get_connection()
+        cursor = conn.cursor()
+        if self.id:
+            cursor.execute(
+                "UPDATE laptops SET name=?, price=?, category_id=? WHERE id=?",
+                (self.name, self.price, self.category_id, self.id)
             )
-        """)
-        CONN.commit()
+        else:
+            cursor.execute(
+                "INSERT INTO laptops (name, price, category_id) VALUES (?, ?, ?)",
+                (self.name, self.price, self.category_id)
+            )
+            self.id = cursor.lastrowid
+        conn.commit()
+        conn.close()
 
-    @classmethod
-    def create(cls, name: str, brand: str, price: float, stock: int, category_id: int) -> "Laptop":
-        laptop = cls(None, name, brand, price, stock, category_id)
-        CURSOR.execute(
-            "INSERT INTO laptops (name, brand, price, stock, category_id) VALUES (?, ?, ?, ?, ?)",
-            (laptop.name, laptop.brand, laptop.price, laptop.stock, laptop.category_id)
-        )
-        CONN.commit()
-        laptop.id = CURSOR.lastrowid
-        return laptop
+    def delete(self):
+        if self.id:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM laptops WHERE id=?", (self.id,))
+            conn.commit()
+            conn.close()
 
-    @classmethod
-    def get_all(cls) -> list["Laptop"]:
-        rows = CURSOR.execute("SELECT id, name, brand, price, stock, category_id FROM laptops").fetchall()
-        return [cls(*row) for row in rows]
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, price, category_id FROM laptops")
+        rows = cursor.fetchall()
+        conn.close()
+        return [Laptop(id=row[0], name=row[1], price=row[2], category_id=row[3]) for row in rows]
 
-    @classmethod
-    def find_by_id(cls, id: int) -> "Laptop | None":
-        row = CURSOR.execute(
-            "SELECT id, name, brand, price, stock, category_id FROM laptops WHERE id=?", (id,)
-        ).fetchone()
-        return cls(*row) if row else None
-
-    @classmethod
-    def delete(cls, id: int) -> bool:
-        CURSOR.execute("DELETE FROM laptops WHERE id=?", (id,))
-        CONN.commit()
-        return CURSOR.rowcount > 0
-
-    @classmethod
-    def find_by_category(cls, category_id: int) -> list["Laptop"]:
-        rows = CURSOR.execute(
-            "SELECT id, name, brand, price, stock, category_id FROM laptops WHERE category_id=?", (category_id,)
-        ).fetchall()
-        return [cls(*row) for row in rows]
+    @staticmethod
+    def find_by_id(id):
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, price, category_id FROM laptops WHERE id=?", (id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return Laptop(id=row[0], name=row[1], price=row[2], category_id=row[3])
+        return None
