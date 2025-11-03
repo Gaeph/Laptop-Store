@@ -1,10 +1,14 @@
 import sqlite3
 
+DB_NAME = "laptops.db"
+
 def get_connection():
-    conn = sqlite3.connect("laptops.db")
+    """Return a SQLite3 database connection."""
+    conn = sqlite3.connect(DB_NAME)
     return conn
 
 def create_tables():
+    """Create tables for categories and laptops if they don't exist."""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -19,7 +23,7 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS laptops (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            price REAL NOT NULL,
+            price REAL NOT NULL CHECK(price > 0),
             category_id INTEGER,
             FOREIGN KEY(category_id) REFERENCES categories(id)
         )
@@ -27,3 +31,7 @@ def create_tables():
 
     conn.commit()
     conn.close()
+    print("Database tables created (if not exist).")
+
+if __name__ == "__main__":
+    create_tables()
